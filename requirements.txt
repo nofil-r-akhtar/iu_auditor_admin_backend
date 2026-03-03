@@ -2,6 +2,8 @@ fastapi
 uvicorn
 supabase
 python-dotenv
-bcrypt
+bcrypt==4.0.1
 python-jose[cryptography]
 passlib[bcrypt]
+pydantic[email]
+email-validator
