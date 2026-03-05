@@ -78,7 +78,8 @@ def forgot_password(data: ForgotPasswordRequest):
 # ─── VERIFY OTP ───────────────────────────────────────
 @router.post("/verify-otp")
 def verify_otp_route(data: VerifyOTPRequest):
-    success, message = verify_otp(data.email, data.otp_code, "forgot_password")
+    # check only — don't mark as used yet!
+    success, message = verify_otp(data.email, data.otp_code, "forgot_password", mark_used=False)
 
     if not success:
         return JSONResponse(status_code=400, content={
@@ -117,7 +118,8 @@ def resend_otp(data: ResendOTPRequest):
 # ─── CHANGE PASSWORD ──────────────────────────────────
 @router.post("/change-password")
 def change_password(data: ChangePasswordRequest):
-    success, message = verify_otp(data.email, data.otp_code, "forgot_password")
+    # mark as used here — final step!
+    success, message = verify_otp(data.email, data.otp_code, "forgot_password", mark_used=True)
 
     if not success:
         return JSONResponse(status_code=400, content={

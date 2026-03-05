@@ -43,7 +43,7 @@ def send_otp(email: str, otp_type: str, user_id: str):
     send_email(email, subject, body)
     return True
 
-def verify_otp(email: str, otp_code: str, otp_type: str):
+def verify_otp(email: str, otp_code: str, otp_type: str, mark_used: bool = True):
     result = supabase.table("otp_verifications")\
         .select("*")\
         .eq("email", email)\
@@ -62,10 +62,11 @@ def verify_otp(email: str, otp_code: str, otp_type: str):
     if datetime.now(timezone.utc) > expires_at:
         return False, "OTP has expired"
 
-    # Mark as used
-    supabase.table("otp_verifications")\
-        .update({"is_used": True})\
-        .eq("id", otp["id"])\
-        .execute()
+    # Only mark as used if requested
+    if mark_used:
+        supabase.table("otp_verifications")\
+            .update({"is_used": True})\
+            .eq("id", otp["id"])\
+            .execute()
 
     return True, "OTP verified"
