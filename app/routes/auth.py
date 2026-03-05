@@ -1,4 +1,5 @@
-from fastapi import APIRouter, HTTPException
+from app.middleware.auth_middleware import get_current_user
+from fastapi import APIRouter, HTTPException, Depends
 from fastapi.responses import JSONResponse
 from app.models.user import (
     LoginRequest, ForgotPasswordRequest,
@@ -138,3 +139,30 @@ def change_password(data: ChangePasswordRequest):
         "success": True,
         "message": "Password changed successfully"
     })
+
+    # ─── ME ───────────────────────────────────────────────
+@router.get("/me")
+def me(current_user: dict = Depends(get_current_user)):
+    try:
+        result = supabase.table("users")\
+            .select("id, name, email, role, created_at")\
+            .eq("id", current_user["sub"])\
+            .execute()
+
+        if not result.data:
+            return JSONResponse(status_code=404, content={
+                "success": False,
+                "message": "User not found"
+            })
+
+        return JSONResponse(status_code=200, content={
+            "success": True,
+            "message": "Profile fetched successfully",
+            "data": result.data[0]
+        })
+
+    except Exception as e:
+        return JSONResponse(status_code=500, content={
+            "success": False,
+            "message": "Failed to fetch profile"
+        })
