@@ -1,4 +1,5 @@
 from fastapi import APIRouter, HTTPException
+from fastapi.responses import JSONResponse
 from app.models.user import (
     LoginRequest, ForgotPasswordRequest,
     VerifyOTPRequest, ResendOTPRequest, ChangePasswordRequest
@@ -18,15 +19,18 @@ def login(data: LoginRequest):
         .execute()
 
     if not result.data:
-        raise HTTPException(
-            status_code=404, 
-            success = "false",
-            detail= "Invalid email or passowrd")
+        return JSONResponse(status_code=404, content={
+            "success": False,
+            "message": "Invalid email or password"
+        })
 
     user = result.data[0]
 
     if not verify_password(data.password, user["password_hash"]):
-        raise HTTPException(status_code=401, success = "false", detail="Invalid password")
+        return JSONResponse(status_code=401, content={
+            "success": False,
+            "message": "Invalid email or password"
+        })
 
     token = create_access_token({
         "sub": str(user["id"]),
@@ -34,17 +38,20 @@ def login(data: LoginRequest):
         "role": user["role"]
     })
 
-    return {
-        "access_token": token,
-        "token_type": "bearer",
-        "success": "true",
-        "user": {
-            "id": user["id"],
-            "name": user["name"],
-            "email": user["email"],
-            "role": user["role"]
+    return JSONResponse(status_code=200, content={
+        "success": True,
+        "message": "Login successful",
+        "data": {
+            "access_token": token,
+            "token_type": "bearer",
+            "user": {
+                "id": user["id"],
+                "name": user["name"],
+                "email": user["email"],
+                "role": user["role"]
+            }
         }
-    }
+    })
 
 # ─── FORGOT PASSWORD ──────────────────────────────────
 @router.post("/forgot-password")
@@ -55,14 +62,18 @@ def forgot_password(data: ForgotPasswordRequest):
         .execute()
 
     if not result.data:
-        raise HTTPException(status_code=404, success = "false", detail="Email not found")
+        return JSONResponse(status_code=404, content={
+            "success": False,
+            "message": "No account found with this email address"
+        })
 
     user = result.data[0]
     send_otp(user["email"], "forgot_password", user["id"])
 
-    return {
-        "success": "true",
-        "message": "OTP sent to your email"}
+    return JSONResponse(status_code=200, content={
+        "success": True,
+        "message": "OTP sent to your email"
+    })
 
 # ─── VERIFY OTP ───────────────────────────────────────
 @router.post("/verify-otp")
@@ -70,9 +81,16 @@ def verify_otp_route(data: VerifyOTPRequest):
     success, message = verify_otp(data.email, data.otp_code, "forgot_password")
 
     if not success:
-        raise HTTPException(status_code=400, success = "false", detail=message)
+        return JSONResponse(status_code=400, content={
+            "success": False,
+            "message": message
+        })
 
-    return {"success": "true", "message": message, "verified": True}
+    return JSONResponse(status_code=200, content={
+        "success": True,
+        "message": "OTP verified successfully",
+        "verified": True
+    })
 
 # ─── RESEND OTP ───────────────────────────────────────
 @router.post("/resend-otp")
@@ -83,14 +101,18 @@ def resend_otp(data: ResendOTPRequest):
         .execute()
 
     if not result.data:
-        raise HTTPException(status_code=404, success = "false", detail="Email not found")
+        return JSONResponse(status_code=404, content={
+            "success": False,
+            "message": "No account found with this email address"
+        })
 
     user = result.data[0]
     send_otp(user["email"], "forgot_password", user["id"])
 
-    return {
-        "success": "true",
-        "message": "New OTP sent to your email"}
+    return JSONResponse(status_code=200, content={
+        "success": True,
+        "message": "New OTP sent to your email"
+    })
 
 # ─── CHANGE PASSWORD ──────────────────────────────────
 @router.post("/change-password")
@@ -98,7 +120,10 @@ def change_password(data: ChangePasswordRequest):
     success, message = verify_otp(data.email, data.otp_code, "forgot_password")
 
     if not success:
-        raise HTTPException(status_code=400, success = false, detail=message)
+        return JSONResponse(status_code=400, content={
+            "success": False,
+            "message": message
+        })
 
     new_hash = hash_password(data.new_password)
 
@@ -107,6 +132,7 @@ def change_password(data: ChangePasswordRequest):
         .eq("email", data.email)\
         .execute()
 
-    return {
-        "success": "true",
-        "message": "Password changed successfully ✅"}
+    return JSONResponse(status_code=200, content={
+        "success": True,
+        "message": "Password changed successfully"
+    })
