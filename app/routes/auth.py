@@ -20,13 +20,13 @@ def login(data: LoginRequest):
     if not result.data:
         raise HTTPException(
             status_code=404, 
-            success = "false"
+            success = "false",
             detail= "Invalid email or passowrd")
 
     user = result.data[0]
 
     if not verify_password(data.password, user["password_hash"]):
-        raise HTTPException(status_code=401, success = "false" ,detail="Invalid password")
+        raise HTTPException(status_code=401, success = "false", detail="Invalid password")
 
     token = create_access_token({
         "sub": str(user["id"]),
@@ -37,7 +37,7 @@ def login(data: LoginRequest):
     return {
         "access_token": token,
         "token_type": "bearer",
-        "success": "true"
+        "success": "true",
         "user": {
             "id": user["id"],
             "name": user["name"],
@@ -89,7 +89,7 @@ def resend_otp(data: ResendOTPRequest):
     send_otp(user["email"], "forgot_password", user["id"])
 
     return {
-        "success": "true"
+        "success": "true",
         "message": "New OTP sent to your email"}
 
 # ─── CHANGE PASSWORD ──────────────────────────────────
@@ -108,5 +108,5 @@ def change_password(data: ChangePasswordRequest):
         .execute()
 
     return {
-        "success": "true"
+        "success": "true",
         "message": "Password changed successfully ✅"}
