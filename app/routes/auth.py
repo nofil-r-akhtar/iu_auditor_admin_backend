@@ -140,7 +140,7 @@ def change_password(data: ChangePasswordRequest):
         "message": "Password changed successfully"
     })
 
-    # ─── ME ───────────────────────────────────────────────
+# ─── ME ───────────────────────────────────────────────
 @router.get("/me")
 def me(current_user: dict = Depends(get_current_user)):
     try:
