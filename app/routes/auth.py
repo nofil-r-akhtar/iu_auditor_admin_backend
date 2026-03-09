@@ -3,7 +3,7 @@ from fastapi import APIRouter, HTTPException, Depends
 from fastapi.responses import JSONResponse
 from app.models.user import (
     LoginRequest, ForgotPasswordRequest,
-    VerifyOTPRequest, ResendOTPRequest, ChangePasswordRequest
+    VerifyOTPRequest, ResendOTPRequest, ChangePasswordRequest, FirstLoginChangePassword
 )
 from app.services.auth_service import verify_password, create_access_token, hash_password
 from app.services.otp_service import send_otp, verify_otp
@@ -45,6 +45,7 @@ def login(data: LoginRequest):
         "data": {
             "access_token": token,
             "token_type": "bearer",
+            "must_change_password": user["must_change_password"],
             "user": {
                 "id": user["id"],
                 "name": user["name"],
@@ -165,4 +166,58 @@ def me(current_user: dict = Depends(get_current_user)):
         return JSONResponse(status_code=500, content={
             "success": False,
             "message": "Failed to fetch profile"
+        })
+
+# ─── FIRST LOGIN CHANGE PASSWORD ──────────────────────
+@router.post("/first-login-change-password")
+def first_login_change_password(data: FirstLoginChangePassword):
+    try:
+        # Fetch user
+        result = supabase.table("users")\
+            .select("*")\
+            .eq("email", data.email)\
+            .execute()
+
+        if not result.data:
+            return JSONResponse(status_code=404, content={
+                "success": False,
+                "message": "User not found"
+            })
+
+        user = result.data[0]
+
+        # Verify old password
+        if not verify_password(data.old_password, user["password_hash"]):
+            return JSONResponse(status_code=401, content={
+                "success": False,
+                "message": "Old password is incorrect"
+            })
+
+        # Check must_change_password flag
+        if not user["must_change_password"]:
+            return JSONResponse(status_code=400, content={
+                "success": False,
+                "message": "Password change not required"
+            })
+
+        # Hash and update new password
+        new_hash = hash_password(data.new_password)
+
+        supabase.table("users")\
+            .update({
+                "password_hash": new_hash,
+                "must_change_password": False  # ← turn off flag
+            })\
+            .eq("email", data.email)\
+            .execute()
+
+        return JSONResponse(status_code=200, content={
+            "success": True,
+            "message": "Password changed successfully. Please login again."
+        })
+
+    except Exception as e:
+        return JSONResponse(status_code=500, content={
+            "success": False,
+            "message": "Failed to change password"
         })
