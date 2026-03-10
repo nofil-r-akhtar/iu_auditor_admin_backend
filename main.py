@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.config.database import supabase
-from app.routes import auth, teachers, admin
+from app.routes import auth, teachers, admin, audit_forms
 
 app = FastAPI(title="IU Auditor")
 
@@ -16,6 +16,7 @@ app.add_middleware(
 app.include_router(auth.router, prefix="/api/auth", tags=["Auth"])
 app.include_router(teachers.router, prefix="/api/teachers", tags=["Teachers"])
 app.include_router(admin.router, prefix="/api/admin", tags=["Admin"])
+app.include_router(audit_forms.router, prefix="/api/audit", tags=["Audit Forms"])
 
 @app.get("/")
 def root():
