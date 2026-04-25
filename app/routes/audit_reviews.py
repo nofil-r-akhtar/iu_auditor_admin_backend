@@ -127,10 +127,40 @@ def create_review(data: CreateReviewRequest, current_user: dict = Depends(admin_
                 "message": "Audit form not found"
             })
 
+        # 🔒 Department-match check — when admin assigns a review to a
+        #    senior lecturer, the lecturer's department must match the
+        #    teacher's department. Admins bypass this since they have no dept.
+        reviewed_by = data.reviewed_by if hasattr(data, "reviewed_by") and data.reviewed_by \
+                      else current_user["sub"]
+
+        teacher_full = supabase.table("teachers")\
+            .select("department")\
+            .eq("id", data.teacher_id)\
+            .execute()
+        teacher_dept = teacher_full.data[0].get("department") if teacher_full.data else None
+
+        reviewer = supabase.table("users")\
+            .select("role, department")\
+            .eq("id", reviewed_by)\
+            .execute()
+
+        if reviewer.data:
+            reviewer_role = reviewer.data[0].get("role")
+            reviewer_dept = reviewer.data[0].get("department")
+            if reviewer_role == "senior_lecturer" and reviewer_dept != teacher_dept:
+                return JSONResponse(status_code=400, content={
+                    "success": False,
+                    "message": (
+                        f"Cannot assign: lecturer's department "
+                        f"({reviewer_dept}) doesn't match teacher's "
+                        f"department ({teacher_dept})."
+                    )
+                })
+
         result = supabase.table("audit_reviews").insert({
             "teacher_id": data.teacher_id,
             "form_id": data.form_id,
-            "reviewed_by": current_user["sub"],
+            "reviewed_by": reviewed_by,
             "status": "pending",
             "notes": data.notes
         }).execute()
@@ -183,14 +213,46 @@ def delete_review(id: str, current_user: dict = Depends(admin_only)):
 # ══════════════════════════════════════════════════════
 
 # ─── GET MY ASSIGNED REVIEWS ──────────────────────────
+# 🔒 Senior lecturers only see audits where the teacher's department
+#    matches their own department.
 @router.get("/my/reviews")
 def get_my_reviews(current_user: dict = Depends(get_current_user)):
     try:
-        result = supabase.table("audit_reviews")\
-            .select("*, teachers(name, email, department), audit_forms(title, department)")\
-            .eq("reviewed_by", current_user["sub"])\
-            .order("created_at", desc=True)\
+        # 1. Fetch the logged-in user's department from DB
+        user_row = supabase.table("users")\
+            .select("department, role")\
+            .eq("id", current_user["sub"])\
             .execute()
+
+        if not user_row.data:
+            return JSONResponse(status_code=404, content={
+                "success": False,
+                "message": "User not found"
+            })
+
+        user_dept = user_row.data[0].get("department")
+        user_role = user_row.data[0].get("role")
+
+        # 2. Build base query — reviews assigned to this user
+        query = supabase.table("audit_reviews")\
+            .select("*, teachers!inner(name, email, department), audit_forms(title, department)")\
+            .eq("reviewed_by", current_user["sub"])
+
+        # 3. For senior_lecturer, also filter by matching department.
+        #    Admins (super_admin / admin) bypass this filter — they
+        #    typically don't have a department anyway.
+        if user_role == "senior_lecturer":
+            if not user_dept:
+                # Lecturer with no department → safer to return nothing
+                return JSONResponse(status_code=200, content={
+                    "success": True,
+                    "message": "No department set on your account",
+                    "total": 0,
+                    "data": []
+                })
+            query = query.eq("teachers.department", user_dept)
+
+        result = query.order("created_at", desc=True).execute()
 
         return JSONResponse(status_code=200, content={
             "success": True,
