@@ -146,7 +146,7 @@ def change_password(data: ChangePasswordRequest):
 def me(current_user: dict = Depends(get_current_user)):
     try:
         result = supabase.table("users")\
-            .select("id, name, email, role, created_at")\
+            .select("id, name, email, role, department, must_change_password, created_at")\
             .eq("id", current_user["sub"])\
             .execute()
 
