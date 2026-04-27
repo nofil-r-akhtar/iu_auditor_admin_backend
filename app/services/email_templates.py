@@ -195,7 +195,7 @@ def audit_assigned_email(
     teacher_department: str,
     form_title: str,
     notes: str | None = None,
-    portal_url: str = "https://iu-auditor-app.vercel.app",
+    portal_url: str = "https://iu-auditor.vercel.app",
 ) -> tuple[str, str]:
     notes_block = ""
     if notes and notes.strip():
