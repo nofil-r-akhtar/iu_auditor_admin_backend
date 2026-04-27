@@ -3,6 +3,8 @@ from fastapi.responses import JSONResponse
 from app.models.audit_review import CreateReviewRequest, SubmitReviewRequest
 from app.middleware.auth_middleware import get_current_user
 from app.config.database import supabase
+from app.services.email_service import send_email_async
+from app.services.email_templates import audit_assigned_email
 
 router = APIRouter()
 
@@ -134,13 +136,13 @@ def create_review(data: CreateReviewRequest, current_user: dict = Depends(admin_
                       else current_user["sub"]
 
         teacher_full = supabase.table("teachers")\
-            .select("department")\
+            .select("name, email, department")\
             .eq("id", data.teacher_id)\
             .execute()
         teacher_dept = teacher_full.data[0].get("department") if teacher_full.data else None
 
         reviewer = supabase.table("users")\
-            .select("role, department")\
+            .select("name, email, role, department")\
             .eq("id", reviewed_by)\
             .execute()
 
@@ -164,6 +166,36 @@ def create_review(data: CreateReviewRequest, current_user: dict = Depends(admin_
             "status": "pending",
             "notes": data.notes
         }).execute()
+
+        # ── Notify the assigned senior lecturer via email (non-blocking) ──
+        try:
+            # Reviewer + teacher info already fetched earlier in this function
+            if reviewer.data and teacher_full.data:
+                lecturer_email = reviewer.data[0].get("email")
+                lecturer_name  = reviewer.data[0].get("name", "Lecturer")
+                teacher_name   = teacher_full.data[0].get("name", "—")
+                teacher_dept_v = teacher_full.data[0].get("department", "")
+
+                # Form title (one extra fetch — keeps the email rich)
+                form_full = supabase.table("audit_forms")\
+                    .select("title")\
+                    .eq("id", data.form_id)\
+                    .execute()
+                form_title = (form_full.data[0].get("title")
+                              if form_full.data else "Audit Form")
+
+                if lecturer_email:
+                    subject, body = audit_assigned_email(
+                        lecturer_name=lecturer_name,
+                        teacher_name=teacher_name,
+                        teacher_department=teacher_dept_v,
+                        form_title=form_title,
+                        notes=data.notes,
+                    )
+                    send_email_async(lecturer_email, subject, body)
+        except Exception as e:
+            import logging
+            logging.error(f"Failed to dispatch audit-assigned email: {e}")
 
         return JSONResponse(status_code=201, content={
             "success": True,

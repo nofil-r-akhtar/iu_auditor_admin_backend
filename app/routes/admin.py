@@ -2,6 +2,8 @@ from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import JSONResponse
 from app.models.user import CreateUserRequest, UpdateUserRequest
 from app.middleware.auth_middleware import get_current_user
+from app.services.email_service import send_email_async
+from app.services.email_templates import welcome_user_email
 from app.services.auth_service import hash_password
 from app.config.database import supabase
 
@@ -123,6 +125,21 @@ def create_user(data: CreateUserRequest, current_user: dict = Depends(admin_only
             "department": data.department,
             "must_change_password": True
         }).execute()
+
+        # ── Send welcome email (non-blocking) ──────────────────
+        # Failures are logged but don't fail the user creation.
+        try:
+            subject, body = welcome_user_email(
+                name=data.name,
+                email=data.email,
+                temp_password=data.password,
+                role=data.role,
+                department=data.department,
+            )
+            send_email_async(data.email, subject, body)
+        except Exception as e:
+            import logging
+            logging.error(f"Failed to dispatch welcome email: {e}")
 
         return JSONResponse(status_code=201, content={
             "success": True,

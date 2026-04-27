@@ -3,6 +3,8 @@ from fastapi.responses import JSONResponse
 from app.models.teacher import CreateTeacherRequest, UpdateTeacherRequest, UpdateStatusRequest
 from app.middleware.auth_middleware import get_current_user
 from app.config.database import supabase
+from app.services.email_service import send_email_async
+from app.services.email_templates import teacher_added_email
 
 router = APIRouter()
 
@@ -80,6 +82,19 @@ def create_teacher(data: CreateTeacherRequest, current_user: dict = Depends(get_
             "audit_time": data.audit_time,
             "status": data.status
         }).execute()
+
+        # ── Notify the teacher they've been added (non-blocking) ──
+        try:
+            subject, body = teacher_added_email(
+                name=data.name,
+                department=data.department,
+                audit_date=data.audit_date,
+                audit_time=data.audit_time,
+            )
+            send_email_async(data.email, subject, body)
+        except Exception as e:
+            import logging
+            logging.error(f"Failed to dispatch teacher email: {e}")
 
         return JSONResponse(status_code=201, content={
             "success": True,
